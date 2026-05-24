@@ -7,10 +7,10 @@ FROM mwaeckerlin/scratch
 ENV CONTAINERNAME "smtp-relay-tls"
 ENV DAYS          "36525"
 ENV MAILHOST      "localhost"
+ENV OPENDKIM      ""
 
 VOLUME /etc/letsencrypt
 COPY --from=build / /
+ADD start.sh /usr/local/bin/start.sh
 USER root
-CMD postconf -e "smtpd_tls_cert_file = /etc/letsencrypt/live/${MAILHOST}/fullchain.pem" \
-    && postconf -e "smtpd_tls_key_file = /etc/letsencrypt/live/${MAILHOST}/privkey.pem"  \
-    && /usr/sbin/postfix start-fg
+CMD ["/usr/local/bin/start.sh"]
