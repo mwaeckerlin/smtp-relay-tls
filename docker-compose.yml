@@ -1,0 +1,27 @@
+# Build / standalone smoke compose — build the image on its own for
+# testing. Not a production deployment: the TLS relay needs a real
+# certificate volume (/etc/letsencrypt/live/$MAILHOST/) to be useful.
+
+services:
+  smtp:
+    image: mwaeckerlin/smtp-relay-tls
+    build: .
+    ports:
+      # loopback only: a relay without its certificate volume is a
+      # smoke-test artefact — never expose it beyond the local machine
+      - "127.0.0.1:2525:25"
+    volumes:
+      # The queue MUST persist: postfix answers 250 once a mail is
+      # fsync'ed into the queue — the sender never retries after that.
+      - type: volume
+        source: spool
+        target: /var/spool/postfix
+    healthcheck:
+      test: ["CMD", "/usr/bin/init", "--healthcheck"]
+      interval: 2s
+      timeout: 5s
+      retries: 20
+      start_period: 3s
+
+volumes:
+  spool:

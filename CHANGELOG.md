@@ -1,5 +1,19 @@
 # Changelog
 
+- 2026-07-18 **security hardening**
+    - Every configuration value from the environment is now validated
+      before use; a malformed value (an embedded newline that could
+      smuggle extra configuration directives, or a path separator in
+      the certificate host name) refuses to start with a clear
+      `invalid <VAR>` error instead of silently producing a broken or
+      unsafe configuration. Covered by the new config-validation test
+      suite (`npm test`).
+    - The deprecated `smtpd_use_tls` switch is replaced by its modern
+      equivalent (`smtpd_tls_security_level = may`) — same behaviour,
+      no more deprecation warning on start-up.
+    - New standalone compose example (loopback only, with healthcheck
+      and persistent queue volume).
+
 - 2026-07-18 **headless image**
     - The image no longer contains a shell, busybox or a package
       manager: a compiled `init` binary configures postfix from the

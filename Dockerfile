@@ -21,7 +21,9 @@ RUN mkdir -p /tmp
 RUN chmod 1777 /tmp
 COPY --from=parent /etc/postfix/main.cf /etc/postfix/main.cf
 RUN addgroup postfix $SHARED_GROUP_NAME
-RUN postconf -e 'smtpd_use_tls = yes'
+# modern replacement for the deprecated `smtpd_use_tls = yes`:
+# opportunistic STARTTLS with the mounted certificate
+RUN postconf -e 'smtpd_tls_security_level = may'
 # master execs every service directly — no chroot jail exists in the
 # headless image, so normalize all master.cf entries to chroot=n.
 RUN postconf -F '*/*/chroot=n'
