@@ -1,4 +1,4 @@
-FROM mwaeckerlin/smtp-relay as build
+FROM mwaeckerlin/smtp-relay:1 as build
 RUN addgroup postfix $SHARED_GROUP_NAME
 RUN postconf -e 'smtpd_use_tls = yes'
 
