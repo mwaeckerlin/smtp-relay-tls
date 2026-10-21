@@ -17,6 +17,9 @@ Behaviour (port of the former start.sh, contract unchanged):
      the previous start.sh: the cert volume is this image's contract.
   3. Delivery-affecting limits from env — high, configurable defaults
      (MESSAGE_SIZE_LIMIT default 100 GiB, SMTP_HARD_ERROR_LIMIT 20).
+     MYNETWORKS replaces the networks allowed to relay (unset keeps the
+     list inherited from smtp-relay); RELAYHOST host or host:port sends
+     all outbound mail through that host (relayhost=[host]:port).
   4. postsuper queue sanity, then exec master in init mode (-i) as
      PID 1 — the daemon `postfix start-fg` ends up running, minus the
      shell wrapper. maillog_file=/dev/stdout keeps logs on stdout.
@@ -192,6 +195,27 @@ configure_milter(const std::string &addr) {
   std::cerr << "**** OpenDKIM milter: inet:" << addr << std::endl;
 }
 
+// The brackets suppress the MX lookup; a port stays outside them.
+std::string
+bracket_relayhost(const std::string &relayhost) {
+  const auto colon = relayhost.find(':');
+  if (colon == std::string::npos) return "[" + relayhost + "]";
+  return "[" + relayhost.substr(0, colon) + "]" + relayhost.substr(colon);
+}
+
+void
+configure_routing(const std::string &mynetworks, const std::string &relayhost) {
+  if (!mynetworks.empty()) {
+    postconf_set("mynetworks", mynetworks);
+    std::cerr << "**** mynetworks = " << mynetworks << std::endl;
+  }
+  if (!relayhost.empty()) {
+    postconf_set("relayhost", bracket_relayhost(relayhost));
+    std::cerr << "**** All outbound mail relayed through "
+              << relayhost << std::endl;
+  }
+}
+
 void
 configure_limits() {
   const std::string size = env_or("MESSAGE_SIZE_LIMIT",    "107374182400");
@@ -241,12 +265,16 @@ tcp_probe(const std::string &host, int port) {
 int main(int argc, char *argv[]) try {
   const std::string opendkim = env_or("OPENDKIM");
   const std::string mailhost = env_or("MAILHOST", "localhost");
+  const std::string mynetworks = env_or("MYNETWORKS");
+  const std::string relayhost  = env_or("RELAYHOST");
 
   // Validate every env value before it is rendered anywhere — also on
   // the --healthcheck path, so a misconfigured container reports
   // unhealthy instead of probing a listener that never came up.
   check_chars("OPENDKIM", opendkim, ".-_:");
   check_chars("MAILHOST", mailhost, ".-");   // no '/': path segment only
+  check_chars("MYNETWORKS", mynetworks, " ./:,[]!-");
+  check_chars("RELAYHOST",  relayhost,  ".-_:");
   check_num("MESSAGE_SIZE_LIMIT",
             env_or("MESSAGE_SIZE_LIMIT", "107374182400"), 0, 999999999999999L);
   check_num("SMTP_HARD_ERROR_LIMIT",
@@ -264,6 +292,7 @@ int main(int argc, char *argv[]) try {
   std::cerr << "**** TLS certificate: " << live << std::endl;
 
   disable_dnsbl();
+  configure_routing(mynetworks, relayhost);
   configure_limits();
 
   std::cerr << "**** Starting postfix master (smtp-relay-tls)" << std::endl;

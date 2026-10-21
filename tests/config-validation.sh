@@ -76,11 +76,15 @@ _reject mailhost_traversal    MAILHOST    "../../../etc"
 _reject mailhost_injection    MAILHOST    $'mail.example.com\nsmtpd_tls_security_level = none'
 _reject size_not_numeric      MESSAGE_SIZE_LIMIT    "100G"
 _reject hard_error_bad        SMTP_HARD_ERROR_LIMIT "many"
+_reject mynetworks_injection  MYNETWORKS  $'10.0.0.0/8\nsmtpd_tls_auth_only = no'
+_reject relayhost_bad         RELAYHOST   $'relay.example.com\nmynetworks = 0.0.0.0/0'
 
 _accept defaults
 _accept explicit_values \
     -e OPENDKIM=opendkim:10026 \
     -e MAILHOST=mail.example.com \
+    -e MYNETWORKS='127.0.0.0/8, [::1]/128' \
+    -e RELAYHOST=relay.example.com:587 \
     -e MESSAGE_SIZE_LIMIT=107374182400 \
     -e SMTP_HARD_ERROR_LIMIT=20
 
