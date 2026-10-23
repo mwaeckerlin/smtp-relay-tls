@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Image contract: `postfix check` accepts the configuration, the container
-# starts the postfix master, and the effective configuration carries TLS
-# with the certificate of MAILHOST and the OPENDKIM milter.
+# starts the postfix master, the effective configuration carries TLS
+# with the certificate of MAILHOST and the OPENDKIM milter, and postconf
+# prints no warning about the configuration, neither in the image nor
+# after start.sh.
 #
 # `--network none` keeps every container off the network; `--pull=never`
 # tests the local build.
@@ -24,6 +26,17 @@ _cleanup() {
     [[ ${#CONTAINERS[@]} -gt 0 ]] && docker rm -f "${CONTAINERS[@]}" > /dev/null 2>&1
 }
 trap _cleanup EXIT
+
+# postconf writes every warning about main.cf and master.cf to stderr
+_no_warnings() {
+    local name="$1" warnings
+    warnings=$(docker exec "${CID}" /usr/sbin/postconf -n 2>&1 > /dev/null)
+    if [[ -z "${warnings}" ]]; then
+        _pass "${name}"
+    else
+        _fail "${name}" "postconf warns: ${warnings}"
+    fi
+}
 
 _results() {
     echo ""
@@ -75,11 +88,19 @@ else
     _fail "postfix_check" "${OUT}"
 fi
 
+WARNINGS=$(docker run --rm --pull=never --network none --entrypoint /usr/sbin/postconf "${IMAGE}" -n 2>&1 > /dev/null)
+if [[ -z "${WARNINGS}" ]]; then
+    _pass "image_no_postconf_warnings"
+else
+    _fail "image_no_postconf_warnings" "postconf warns: ${WARNINGS}"
+fi
+
 if _start defaults; then
-    _expect default_tls      smtpd_use_tls yes
+    _expect default_tls      smtpd_tls_security_level may
     _expect default_cert     smtpd_tls_cert_file /etc/letsencrypt/live/localhost/fullchain.pem
     _expect default_key      smtpd_tls_key_file  /etc/letsencrypt/live/localhost/privkey.pem
     _expect default_milters  smtpd_milters ""
+    _no_warnings defaults_no_postconf_warnings
 fi
 
 if _start mailhost_opendkim -e MAILHOST=mail.example.com -e OPENDKIM=opendkim; then
@@ -87,6 +108,7 @@ if _start mailhost_opendkim -e MAILHOST=mail.example.com -e OPENDKIM=opendkim; t
     _expect mailhost_key          smtpd_tls_key_file  /etc/letsencrypt/live/mail.example.com/privkey.pem
     _expect opendkim_default_port smtpd_milters       "inet:opendkim:10026"
     _expect opendkim_non_smtpd    non_smtpd_milters   "inet:opendkim:10026"
+    _no_warnings mailhost_opendkim_no_postconf_warnings
 fi
 
 if _start opendkim_port -e OPENDKIM=dkim.example.com:8891; then
