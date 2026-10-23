@@ -1,0 +1,4 @@
+services:
+  smtp:
+    image: mwaeckerlin/smtp-relay-tls
+    build: .
