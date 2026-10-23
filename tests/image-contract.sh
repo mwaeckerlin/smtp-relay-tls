@@ -51,13 +51,14 @@ _start() {
     return 1
 }
 
+# postconf prints the value on stdout and its warnings on stderr
 _expect() {
     local name="$1" param="$2" want="$3" got
-    got=$(docker exec "${CID}" /usr/sbin/postconf -h "${param}" 2>&1)
+    got=$(docker exec "${CID}" /usr/sbin/postconf -h "${param}" 2>/dev/null)
     if [[ "${got}" == "${want}" ]]; then
         _pass "${name}"
     else
-        _fail "${name}" "${param} = '${got}', expected '${want}'"
+        _fail "${name}" "${param} = '${got}', expected '${want}' / $(docker exec "${CID}" /usr/sbin/postconf -h "${param}" 2>&1)"
     fi
 }
 
