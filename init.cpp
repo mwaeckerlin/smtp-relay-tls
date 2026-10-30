@@ -203,6 +203,50 @@ bracket_relayhost(const std::string &relayhost) {
   return "[" + relayhost.substr(0, colon) + "]" + relayhost.substr(colon);
 }
 
+// Postfix greets every receiving server with `myhostname`, and without
+// this setting it takes the hostname of the container, which docker
+// fills with the first twelve hex digits of the container id. A name
+// like `d308e74f098d.localdomain` resolves nowhere, so a receiver sees
+// mail from an address announcing a name that does not exist. Measured
+// on 2026-10-27: Spamhaus listed the sending address on XBL and CSS for
+// exactly that, and one listing hits every service behind it.
+//
+// MAILHOST already names the host for the certificate path, so it names
+// it here too. Its default `localhost` is no such name: it resolves to
+// the loopback address everywhere, which is why it reports instead of
+// being written.
+void
+configure_hostname(const std::string &mailhost) {
+  if (!mailhost.empty() && mailhost != "localhost") {
+    postconf_set("myhostname", mailhost);
+    std::cerr << "**** myhostname = " << mailhost << std::endl;
+    return;
+  }
+  // `hostname:` in the compose file sets the container hostname, and
+  // postfix takes myhostname from it. That is a correct setup and stays
+  // silent. What is reported is docker's own default, twelve hex digits
+  // of the container id.
+  const std::string effective = postconf_get("myhostname");
+  const std::string suffix = ".localdomain";
+  const bool unconfigured =
+      effective.size() > suffix.size() &&
+      effective.compare(effective.size() - suffix.size(),
+                        suffix.size(), suffix) == 0;
+  if (unconfigured) {
+    std::cerr << "#### WARNING! myhostname = " << effective
+              << " — nobody configured a name, so postfix greets every"
+              << " receiving server with the container id. That name"
+              << " resolves nowhere: receivers refuse the mail and"
+              << " blocklists record the sending address, which hits every"
+              << " service behind it. Set MAILHOST, or `hostname:` in the"
+              << " compose file, to the name the PTR record of the outgoing"
+              << " address carries." << std::endl;
+  } else {
+    std::cerr << "**** myhostname = " << effective
+              << " (from the container hostname)" << std::endl;
+  }
+}
+
 void
 configure_routing(const std::string &mynetworks, const std::string &relayhost) {
   if (!mynetworks.empty()) {
@@ -292,6 +336,7 @@ int main(int argc, char *argv[]) try {
   std::cerr << "**** TLS certificate: " << live << std::endl;
 
   disable_dnsbl();
+  configure_hostname(mailhost);
   configure_routing(mynetworks, relayhost);
   configure_limits();
 

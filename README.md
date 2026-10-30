@@ -25,6 +25,52 @@ Trade-off: the container starts as root — the postfix master needs it to bind
 
 Postfix answers `250 Ok` as soon as a mail is safely written (fsync) into its queue — from that moment the server owns delivery and the sender never retries. A deferred mail (target greylisting, target briefly down) can sit in the queue for hours or days. **Map `/var/spool/postfix` to a named volume**, otherwise every container recreate or image update silently destroys accepted-but-undelivered mail.
 
+## The name this relay announces — set it, or the address gets blocklisted
+
+**Postfix greets every receiving server with `myhostname`, and without a name of your own that is the id of the container.** Docker fills the container hostname with the first twelve hex digits of the container id, postfix takes `myhostname` from it, and `smtp_helo_name = $myhostname` sends it out on every connection. A name like `d308e74f098d.localdomain` resolves nowhere.
+
+What that costs, measured on 2026-10-27 on a cluster running the sibling image `mwaeckerlin/smtp-relay`: Spamhaus listed the sending address on XBL and CSS, with the entry
+
+```
+212.51.159.193  2026-10-27 15:15:00  d308e74f098d.localdomain
+```
+
+The mail behind it was a calendar invitation from Nextcloud. One listing hits every service behind that address, because the address is what gets listed, not the container.
+
+**`MAILHOST` names the host, and this image already uses it for the certificate path.** Set it to a real name and postfix announces it:
+
+```yaml
+smtp:
+  image: mwaeckerlin/smtp-relay-tls
+  hostname: mail.example.com
+  environment:
+    MAILHOST: mail.example.com
+```
+
+The default `localhost` is no such name: it resolves to the loopback address everywhere. Left at the default and without `hostname:`, the start writes a warning naming the container id it is about to announce.
+
+**Which name belongs there: the one the PTR record of the outgoing address carries.** Three values have to agree, and all three are readable:
+
+```
+hostname: mail.example.com         in the compose file
+dig +short mail.example.com        the address the mail leaves from
+dig +short -x <that address>       mail.example.com
+```
+
+The certificate under `/etc/letsencrypt/live/$MAILHOST/` carries the same name, so one name serves both.
+
+Google, Microsoft and Yahoo require that record in their published sender rules: «Ensure that sending domains or IPs have valid forward and reverse DNS records» (Google, [Email sender guidelines](https://support.google.com/mail/answer/81126)), «Have a valid forward and reverse DNS record for your sending IPs» (Yahoo, [Sender Best Practices](https://senders.yahooinc.com/best-practices/)), «Email servers must have valid reverse DNS records» (Microsoft, Outlook.com postmaster policies).
+
+**A correct name alone does not get the mail through.** A relay that delivers directly sends on behalf of your domains, and a receiver asks whether your domain authorises this address. Without SPF, Google answers `5.7.26 unauthenticated mail` and the message bounces. Publish for every sending domain:
+
+```
+example.com.  IN TXT  "v=spf1 mx ip4:<the outgoing address> -all"
+```
+
+and sign with DKIM through `OPENDKIM` below. The full records are in «SPF, DKIM and DMARC» at the end of this file.
+
+A complete stack with Nextcloud and WordPress sending through a relay is in [`docker-compose.example.yml`](../smtp-relay/docker-compose.example.yml) of the sibling image; it differs only in the image name and the certificate volume.
+
 ## Relay networks and upstream relay
 
 - **`MYNETWORKS`** (default `127.0.0.1/32 192.168.0.0/16 172.16.0.0/12 10.0.0.0/8`): the client networks allowed to relay through this server, in postfix `mynetworks` syntax. Narrow it to the networks of the services that really send mail.

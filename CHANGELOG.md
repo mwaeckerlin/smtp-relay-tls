@@ -1,5 +1,8 @@
 # Changelog
 
+- 2026-10-30 **3.5.4**
+    - The name postfix announces is configurable and reported. Without `MAILHOST` or a `hostname:` in the compose file, postfix took the container hostname, which docker fills with the first twelve hex digits of the container id: every receiving server was greeted with a name that resolves nowhere. On 2026-10-27 that put a sending address on the Spamhaus lists XBL and CSS, with the entry `212.51.159.193 2026-10-27 15:15:00 d308e74f098d.localdomain`, and one listing hits every service behind that address. `MAILHOST` now writes `myhostname`, a start without any name says in the log what it is about to announce and what it costs, and the README carries the three values that have to agree with the commands to read them.
+
 - 2026-10-23 **3.5.3**
     - The weekly run also rebuilds the version lines 1, 2 and 3, published as `mwaeckerlin/smtp-relay-tls:1`, `:2` and `:3` from the branches `1`, `2` and `3`, so every line gets the security fixes of its base images
 
