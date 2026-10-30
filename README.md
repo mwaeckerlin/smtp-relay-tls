@@ -37,6 +37,8 @@ What that costs, measured on 2026-10-27 on a cluster running the sibling image `
 
 The mail behind it was a calendar invitation from Nextcloud. One listing hits every service behind that address, because the address is what gets listed, not the container.
 
+**The entry carries that name; the reason Spamhaus gives for the listing is the address pool.** On the removal, 2026-10-30, it answered: the address «is dynamic or CGNAT, and has a extremely poor reputation due to the amount of spam, malware, and other internet abuse associated with it», and it names the provider's open port 25 on that pool as the cause, with the listing likely to return. So a name of your own is one of two conditions for direct delivery, and the only one this image can meet. The other is an address whose reputation you own: a static one from the provider, or `RELAYHOST` towards a server that has one.
+
 **`MAILHOST` names the host, and this image already uses it for the certificate path.** Set it to a real name and postfix announces it:
 
 ```yaml
